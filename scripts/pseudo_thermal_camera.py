@@ -37,3 +37,4 @@ while True:
 noir_cam.close()
 visual_cam.close()
 cv2.destroyAllWindows()
+
