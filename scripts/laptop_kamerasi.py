@@ -1,7 +1,9 @@
 import cv2
 import numpy as np
 
-cap = cv2.VideoCapture('scripts\deneme2.mp4')
+# Initialize computer camera
+cap = cv2.VideoCapture(0)
+
 object_detector = cv2.createBackgroundSubtractorMOG2(history=100, varThreshold=30)
 
 class KalmanFilter:
@@ -37,20 +39,32 @@ class MeanShiftTracker:
         back_proj = cv2.calcBackProject([hsv], [0], roi_hist, [0, 180], 1)
         ret, self.track_window = cv2.meanShift(back_proj, self.track_window, self.term_crit)
         return self.track_window
-
-# Initialize the Mean Shift Tracker
+    
 mean_shift_tracker = MeanShiftTracker()
 
 kf = KalmanFilter()
 
+if not cap.isOpened():
+    print("Error: Could not open camera.")
+    exit()
+
 while True:
-    
     ret, frame = cap.read()
     if not ret:
+        print("Error: Could not read frame.")
         break
+    
+    # Convert BGR to RGB
+    frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+    
+    # Convert to grayscale (intensity-based)
+    gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+    
+    # Apply a false thermal colormap (e.g., COLORMAP_JET)
+    thermal = cv2.applyColorMap(gray, cv2.COLORMAP_JET)
 
     # Object detection
-    mask = object_detector.apply(frame)
+    mask = object_detector.apply(thermal)
     _, mask = cv2.threshold(mask, 254, 255, cv2.THRESH_BINARY)
     contours, _ = cv2.findContours(mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
     for cnt in contours:
@@ -80,11 +94,13 @@ while True:
                 cv2.putText(frame, 'Mean Shift', (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 0, 0), 2)
 
     cv2.imshow('Frame', frame)
-    # cv2.imshow('Mask', mask)
-
-    key = cv2.waitKey(1)
-    if key == 27:
+    
+    # Show the result
+    cv2.imshow("Pseudo Thermal Camera", thermal)
+    
+    if cv2.waitKey(1) == ord('q'):
         break
 
 cap.release()
 cv2.destroyAllWindows()
+
