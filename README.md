@@ -1,4 +1,4 @@
-Bitirme Çalışması İş Paketleri: 25 Mart 2025 3.Hafta
+Bitirme Çalışması İş Paketleri: 25 Mart 2025 6.Hafta
 
 *İnfrared filtresiz kamera adaptive thresholding ile infrared ışığık kaynağı tespit edildi (güneş biraz daha filtrelenebilir) ve feature extraction ile iki kamera görseli üst üste hizalandı.
 
