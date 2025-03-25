@@ -18,3 +18,6 @@ Arkaplan uyuşmazlığı ve veriseti yetersiliğinden ötürü istenilenden uzak
 
 *Fusion’dan kanatçık çiz veya hazır .sdf bul ve 3D’den bastır. Füze gövdesi için silindir bul veya .sdf bastır.
 
+*Deneysel: 2 eksenli gimball yapıp üzerine lazer konulacak. Bu gimball X ve Y eksenlerinde tarama yapmaya başlayacak. Kamerada sadece lazerden yansıyan bir infrared kaynak varsa tarama devam eder.
+Şayet ekrana ikinci bir infrared kaynak girerse gimball ona doğrultulur.
+
