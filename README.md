@@ -9,7 +9,7 @@ Arkaplan uyuşmazlığı ve veriseti yetersiliğinden ötürü istenilenden uzak
 
 *FPS arttırmak için detectionı belirli aralıklarla koştur. Kalan iterasyonlarda KCF tracker koşsun.
 
-*Track edilen objeye güdümlenmek için dönüşümlere bakıldı. Binocular vision ile z hesaplayıp güdümlenmeye bak. Veya bu çok uzun sürecekse Pixel PID araştır.
+*Binocular vision ile z hesaplanabilmesi için kameraların konfigüre edilmesi gerek. Bunun içi 8x6'lık dama tahtasının iki kamera ile de çeşitli oryantasyonlarda fotoğrafını çek, kalibre et.
 
 *Seeker kısmından çıkan artık hangi sinyal olacaksa (Line of Sight veya Pixel Error) onu Servo Motorlar için kontrol sinyaline çevirecek bir CAS (Kontrol Aktüatör Sistemi) tasarla.
 4 adet kanatçıklı bir füzede fin defleksiyonu nasıl çalışıyor anla.
