@@ -1,4 +1,4 @@
-Bitirme Çalışması İş Paketleri: 25 Mart 2025 6.Hafta
+Bitirme Çalışması İş Paketleri: 20 Nisan 2025 9.Hafta
 
 *İnfrared filtresiz kamera adaptive thresholding ile infrared ışığık kaynağı tespit edildi (güneş biraz daha filtrelenebilir) ve feature extraction ile iki kamera görseli üst üste hizalandı.
 
@@ -7,7 +7,7 @@ Arkaplan uyuşmazlığı ve veriseti yetersiliğinden ötürü istenilenden uzak
 
 *Hailo NPU'sunda modeli koşturmayı öğren. NPU nasıl çalışıyor anla.
 
-*FPS arttırmak için detectionı belirli aralıklarla koştur. Kalan iterasyonlarda KCF tracker koşsun.
+*KCF Tracker entegre edildi. Yolo modeli PyTorch'dan NCNN'e çevrildi (Raspberry'de daha hızlı). Tracker her yeni tespit edilen obje için initialize ediliyor ve track işlemi ana döngüden ayrı bir threadde koşuyor. Ayrıca confidance ve size'ı en yüksek objeler track ediliyor. Yolo, FPS'e bağlı olarak frame skipleyebiliyor. Böylece her saniye çalışmaktansa, örenğin 10 FPS görünyü için 10 frame'de bir çalışıyor (süreye bağlı değil frame'e bağlı)
 
 *Binocular vision ile z hesaplanabilmesi için kameraların konfigüre edilmesi gerek. Bunun içi 8x6'lık dama tahtasının iki kamera ile de çeşitli oryantasyonlarda fotoğrafını çek, kalibre et.
 

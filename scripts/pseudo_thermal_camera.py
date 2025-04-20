@@ -40,7 +40,7 @@ def align_images(img1, img2):
     src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
-    #perspectif transform yap ve noir goruntuye uygula
+    #perspective transform yap ve noir goruntuye uygula
     H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     aligned_noir = cv2.warpPerspective(img1, H, (img2.shape[1], img2.shape[0]))
     
