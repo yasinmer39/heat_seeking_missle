@@ -3,6 +3,7 @@ import sys
 import argparse
 import glob
 import time
+import threading
 
 import cv2
 import numpy as np
@@ -30,7 +31,7 @@ args = parser.parse_args()
 # Parse user inputs
 model_path = args.model
 img_source = args.source
-min_thresh = args.thresh
+min_thresh = float(args.thresh)
 user_res = args.resolution
 record = args.record
 
@@ -121,9 +122,26 @@ bbox_colors = [(164,120,87), (68,148,228), (93,97,209), (178,182,133), (88,159,1
 
 # Initialize control and status variables
 avg_frame_rate = 0
-frame_rate_buffer = []
-fps_avg_len = 200
+frame_rate_buffer = []  # Buffer to store recent FPS values
+fps_avg_len = 50  # Number of frames to average over
 img_count = 0
+
+# Initialize variables for YOLO and KCF tracking
+trackers = []
+last_detection_time = 0
+detection_interval = 1  # YOLO runs at 1Hz
+lock = threading.Lock()
+
+# Function to update KCF trackers
+def update_trackers(frame, trackers):
+    with lock:
+        for tracker, label in trackers:
+            success, bbox = tracker.update(frame)
+            if success:
+                x, y, w, h = map(int, bbox)
+                color = bbox_colors[0]
+                cv2.rectangle(frame, (x, y), (x + w, y + h), color, 2)
+                cv2.putText(frame, label, (x, y - 10), cv2.FONT_HERSHEY_SIMPLEX, 0.5, color, 2)
 
 # Begin inference loop
 while True:
@@ -161,82 +179,50 @@ while True:
     if resize == True:
         frame = cv2.resize(frame,(resW,resH))
 
-    # Run inference on frame
-    results = model(frame, verbose=False)
+    current_time = time.time()
 
-    # Extract results
-    detections = results[0].boxes
+    # Run YOLO detection at 1Hz
+    if current_time - last_detection_time >= detection_interval:
+        last_detection_time = current_time
+        results = model(frame, verbose=False)
+        detections = results[0].boxes
 
-    # Initialize variable for basic object counting example
-    object_count = 0
+        # Clear existing trackers and initialize new ones
+        with lock:
+            trackers = []
+            for i in range(len(detections)):
+                conf = detections[i].conf.item()
+                if conf > min_thresh:
+                    xyxy = detections[i].xyxy.cpu().numpy().squeeze().astype(int)
+                    xmin, ymin, xmax, ymax = xyxy
+                    tracker = cv2.TrackerKCF.create()
+                    tracker.init(frame, (xmin, ymin, xmax - xmin, ymax - ymin))
+                    trackers.append((tracker, labels[int(detections[i].cls.item())]))
 
-    # Go through each detection and get bbox coords, confidence, and class
-    for i in range(len(detections)):
+    # Update KCF trackers in a separate thread
+    tracking_thread = threading.Thread(target=update_trackers, args=(frame, trackers))
+    tracking_thread.start()
+    tracking_thread.join()
 
-        # Get bounding box coordinates
-        # Ultralytics returns results in Tensor format, which have to be converted to a regular Python array
-        xyxy_tensor = detections[i].xyxy.cpu() # Detections in Tensor format in CPU memory
-        xyxy = xyxy_tensor.numpy().squeeze() # Convert tensors to Numpy array
-        xmin, ymin, xmax, ymax = xyxy.astype(int) # Extract individual coordinates and convert to int
+    # Display the frame
+    cv2.imshow('YOLO + KCF Tracking', frame)
 
-        # Get bounding box class ID and name
-        classidx = int(detections[i].cls.item())
-        classname = labels[classidx]
-
-        # Get bounding box confidence
-        conf = detections[i].conf.item()
-
-        # Draw box if confidence threshold is high enough
-        if conf > 0.5:
-
-            color = bbox_colors[classidx % 10]
-            cv2.rectangle(frame, (xmin,ymin), (xmax,ymax), color, 2)
-
-            label = f'{classname}: {int(conf*100)}%'
-            labelSize, baseLine = cv2.getTextSize(label, cv2.FONT_HERSHEY_SIMPLEX, 0.5, 1) # Get font size
-            label_ymin = max(ymin, labelSize[1] + 10) # Make sure not to draw label too close to top of window
-            cv2.rectangle(frame, (xmin, label_ymin-labelSize[1]-10), (xmin+labelSize[0], label_ymin+baseLine-10), color, cv2.FILLED) # Draw white box to put label text in
-            cv2.putText(frame, label, (xmin, label_ymin-7), cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 0, 0), 1) # Draw label text
-
-            # Basic example: count the number of objects in the image
-            object_count = object_count + 1
-
-    # Calculate and draw framerate (if using video, USB, or Picamera source)
-    if source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
-        cv2.putText(frame, f'FPS: {avg_frame_rate:0.2f}', (10,20), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw framerate
-    
-    # Display detection results
-    cv2.putText(frame, f'Number of objects: {object_count}', (10,40), cv2.FONT_HERSHEY_SIMPLEX, .7, (0,255,255), 2) # Draw total number of detected objects
-    cv2.imshow('YOLO detection results',frame) # Display image
-    if record: recorder.write(frame)
-
-    # If inferencing on individual images, wait for user keypress before moving to next image. Otherwise, wait 5ms before moving to next frame.
-    if source_type == 'image' or source_type == 'folder':
-        key = cv2.waitKey()
-    elif source_type == 'video' or source_type == 'usb' or source_type == 'picamera':
-        key = cv2.waitKey(5)
-    
-    if key == ord('q') or key == ord('Q'): # Press 'q' to quit
-        break
-    elif key == ord('s') or key == ord('S'): # Press 's' to pause inference
-        cv2.waitKey()
-    elif key == ord('p') or key == ord('P'): # Press 'p' to save a picture of results on this frame
-        cv2.imwrite('capture.png',frame)
-    
-    # Calculate FPS for this frame
+    # Calculate FPS for the current frame
     t_stop = time.perf_counter()
-    frame_rate_calc = float(1/(t_stop - t_start))
+    frame_rate_calc = 1 / (t_stop - t_start)
+    print(f'FPS: {frame_rate_calc:.2f}')
 
-    # Append FPS result to frame_rate_buffer (for finding average FPS over multiple frames)
-    if len(frame_rate_buffer) >= fps_avg_len:
-        temp = frame_rate_buffer.pop(0)
-        frame_rate_buffer.append(frame_rate_calc)
-    else:
-        frame_rate_buffer.append(frame_rate_calc)
+    # Update the FPS buffer
+    frame_rate_buffer.append(frame_rate_calc)
+    if len(frame_rate_buffer) > fps_avg_len:
+        frame_rate_buffer.pop(0)  # Remove the oldest FPS value
 
-    # Calculate average FPS for past frames
-    avg_frame_rate = np.mean(frame_rate_buffer)
+    # Calculate the average FPS
+    avg_frame_rate = sum(frame_rate_buffer) / len(frame_rate_buffer)
 
+    # Exit on 'q' key press
+    if cv2.waitKey(1) & 0xFF == ord('q'):
+        break
 
 # Clean up
 print(f'Average pipeline FPS: {avg_frame_rate:.2f}')
