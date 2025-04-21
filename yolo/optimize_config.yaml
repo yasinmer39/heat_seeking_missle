@@ -1,0 +1,4 @@
+calib_set: 
+  type: raw_images
+  path: /home/user/heat_seeking_missile/yolo/calib_images_resized
+  size: 100
