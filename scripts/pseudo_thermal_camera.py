@@ -2,20 +2,20 @@ from picamera2 import Picamera2
 import cv2
 import numpy as np
 
-#kamera init kismi
-noir_cam = Picamera2(0)
-visual_cam = Picamera2(1)
+# Kamera init kısmı
+noir_cam = Picamera2(1)
+visual_cam = Picamera2(0)
 
-video_config_0 = noir_cam.create_video_configuration()
-video_config_1 = visual_cam.create_video_configuration()
+video_config_1 = noir_cam.create_video_configuration()
+video_config_0 = visual_cam.create_video_configuration()
 
-noir_cam.configure(video_config_0)
-visual_cam.configure(video_config_1)
+noir_cam.configure(video_config_1)
+visual_cam.configure(video_config_0)
 
 noir_cam.start()
 visual_cam.start()
 
-#hizalama icin ozellik dedektoru
+# Hizalama için özellik dedektörü
 orb = cv2.ORB_create(nfeatures=500)
 
 def align_images(img1, img2):
@@ -25,66 +25,68 @@ def align_images(img1, img2):
     kp1, des1 = orb.detectAndCompute(gray1, None)
     kp2, des2 = orb.detectAndCompute(gray2, None)
 
-    #en yakin komsu arama
     matcher = cv2.BFMatcher(cv2.NORM_HAMMING, crossCheck=True)
     matches = matcher.match(des1, des2)
-    
+
     if len(matches) < 10:
         print("yeterli eslesme yok babafungo")
         return img1
 
-    #mesafeye dayali eslesmeleri sort et
     matches = sorted(matches, key=lambda x: x.distance)
 
-    #eslesmeye karsilik gelen noktalari cikart
     src_pts = np.float32([kp1[m.queryIdx].pt for m in matches]).reshape(-1, 1, 2)
     dst_pts = np.float32([kp2[m.trainIdx].pt for m in matches]).reshape(-1, 1, 2)
 
-    #perspective transform yap ve noir goruntuye uygula
     H, _ = cv2.findHomography(src_pts, dst_pts, cv2.RANSAC, 5.0)
     aligned_noir = cv2.warpPerspective(img1, H, (img2.shape[1], img2.shape[0]))
     
     return aligned_noir
 
+def nothing(x):
+    pass
+
+# Trackbar'ları oluştur
+cv2.namedWindow('Trackbars')
+cv2.createTrackbar('H Lower', 'Trackbars', 0, 179, nothing)
+cv2.createTrackbar('H Upper', 'Trackbars', 179, 179, nothing)
+cv2.createTrackbar('L Lower', 'Trackbars', 0, 255, nothing)  # S yerine L
+cv2.createTrackbar('L Upper', 'Trackbars', 255, 255, nothing)
+cv2.createTrackbar('S Lower', 'Trackbars', 0, 255, nothing)  # V yerine S
+cv2.createTrackbar('S Upper', 'Trackbars', 255, 255, nothing)
+
 while True:
-    frame_noir = noir_cam.capture_array()
+    frame = noir_cam.capture_array()
+    frame = cv2.resize(frame, (640, 480))  # İstersen boyutlandır
     frame_visual = visual_cam.capture_array()
-    
-    #bgr->rgb visual icin
-    frame_visual = cv2.cvtColor(frame_visual, cv2.COLOR_BGR2RGB)
-    
-    #noir ve visual hizala, noir graycsale donustur ve thermal kamera gibi yapan colormap ekle
-    frame_noir = align_images(frame_noir, frame_visual)
-    gray_noir = cv2.cvtColor(frame_noir, cv2.COLOR_BGR2GRAY)
-    thermal_noir = cv2.applyColorMap(gray_noir, cv2.COLORMAP_JET)
 
-    # Fire detection using adaptive thresholding
-    mean_intensity = np.mean(gray_noir)
-    threshold_value = max(200, mean_intensity + 30)  # Dynamically adjust
-    _, fire_mask = cv2.threshold(gray_noir, threshold_value, 255, cv2.THRESH_BINARY)
+    # HSL renk uzayına çevir
+    hsl = cv2.cvtColor(frame, cv2.COLOR_BGR2HLS)
 
-    # Convert fire mask to 3-channel
-    fire_mask_colored = cv2.cvtColor(fire_mask, cv2.COLOR_GRAY2BGR)
+    # Trackbar'lardan değerleri oku
+    h_lower = cv2.getTrackbarPos('H Lower', 'Trackbars')
+    h_upper = cv2.getTrackbarPos('H Upper', 'Trackbars')
+    l_lower = cv2.getTrackbarPos('L Lower', 'Trackbars')
+    l_upper = cv2.getTrackbarPos('L Upper', 'Trackbars')
+    s_lower = cv2.getTrackbarPos('S Lower', 'Trackbars')
+    s_upper = cv2.getTrackbarPos('S Upper', 'Trackbars')
 
-    # Reduce false positives (small regions only)
-    contours, _ = cv2.findContours(fire_mask, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-    for cnt in contours:
-        area = cv2.contourArea(cnt)
-        if area < 50:  # Ignore small noise
-            cv2.drawContours(fire_mask_colored, [cnt], -1, (0, 0, 0), thickness=cv2.FILLED)
+    # HSL aralıklarını ayarla
+    lower_bound = np.array([h_lower, l_lower, s_lower])
+    upper_bound = np.array([h_upper, l_upper, s_upper])
 
-    # Extract fire region from the thermal image
-    fire_region = cv2.bitwise_and(thermal_noir, fire_mask_colored)
+    # Maskele ve sonucu bul
+    mask = cv2.inRange(hsl, lower_bound, upper_bound)
+    result = cv2.bitwise_and(frame, frame, mask=mask)
 
-    # Overlay fire region onto the visual camera feed
-    fused_result = cv2.addWeighted(frame_visual, 1, fire_region, 0.7, 0)
+    # Ekrana bas
+    cv2.imshow('Mask', mask)
+    cv2.imshow('Result', result)
 
-    # Display results
-    cv2.imshow("Fused Camera", fused_result)
-
-    if cv2.waitKey(1) == ord('q'):
+    # 'q' tuşuna basınca çık
+    if cv2.waitKey(1) & 0xFF == ord('q'):
         break
 
+# Her şeyi kapat
 noir_cam.close()
 visual_cam.close()
 cv2.destroyAllWindows()
