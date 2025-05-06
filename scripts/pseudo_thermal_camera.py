@@ -2,6 +2,9 @@ from picamera2 import Picamera2
 import cv2
 import numpy as np
 import socket
+import serial
+
+ser = serial.Serial('/dev/ttyAMA10', 115200, timeout=1)
 
 # # UDP socket (alıcı) setup
 sock = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
@@ -49,10 +52,24 @@ while True:
         mask = cv2.inRange(hsl, lower_bound, upper_bound)
         result = cv2.bitwise_and(frame, frame, mask=mask)
 
+        # Calculate the center of the bounding box
+        bbox_center_x = (x_min + x_max) // 2
+        bbox_center_y = (y_min + y_max) // 2
+
+        # Calculate the center of the frame
+        frame_center_x = frame.shape[1] // 2
+        frame_center_y = frame.shape[0] // 2
+
+        # Draw a line from the center of the frame to the center of the bounding box
+        cv2.line(result, (frame_center_x, frame_center_y), (bbox_center_x, bbox_center_y), (255, 0, 0), 2)
+
         # Draw the bounding box on the result frame in green
         cv2.rectangle(result, (x_min, y_min), (x_max, y_max), (0, 255, 0), 2)
         cv2.putText(result, f"{label} Conf: {confidence:.2f}", (x_min, y_min - 10),
                     cv2.FONT_HERSHEY_SIMPLEX, 0.5, (0, 255, 0), 1)
+
+        # Send the center coordinates of the bounding box via serial
+        ser.write(f"{bbox_center_x},{bbox_center_y}\n".encode())
     except ValueError as ve:
         print(f"Error parsing message: {ve}")
         continue
